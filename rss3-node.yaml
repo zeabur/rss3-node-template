@@ -1,0 +1,354 @@
+x-config: &config |
+  environment: production
+  type: beta
+  discovery:
+    operator:
+      evm_address:
+      signature:
+    server:
+      endpoint: https://beta-node.rss3.io
+      global_indexer_endpoint: https://gi.rss3.dev
+  database:
+    driver: cockroachdb
+    partition: true
+    uri: postgres://root@cockroachdb:26257/defaultdb
+  stream:
+    enable: false
+    driver: kafka
+    topic: rss3.node.activities
+    uri: localhost:9092
+  observability:
+    opentelemetry:
+      metrics:
+        enable: false
+        endpoint: 0.0.0.0:9090
+      traces:
+        enable: false
+        insecure: true
+        endpoint: localhost:4318
+  redis:
+    endpoints:
+      - redis:6379
+    username:
+    password:
+    disable_cache: true
+  endpoints:
+    farcaster:
+      url: https://nemes.farcaster.xyz:2281
+    ethereum:
+      url: https://rpc.ankr.com/eth
+    polygon:
+      url: https://rpc.ankr.com/polygon
+    avax:
+      url: https://rpc.ankr.com/avalanche
+    optimism:
+      url: https://rpc.ankr.com/optimism
+    arbitrum:
+      url: https://rpc.ankr.com/arbitrum
+    gnosis:
+      url: https://rpc.ankr.com/gnosis
+    linea:
+      url: https://rpc.linea.build
+    savm:
+      url: https://alpha-rpc-node-http.svmscan.io
+    binance-smart-chain:
+      url: https://rpc.ankr.com/bsc
+    base:
+      url: https://rpc.ankr.com/base
+      http2_disabled: true
+    crossbell:
+      url: https://rpc.crossbell.io
+    vsl:
+      url: https://rpc.rss3.io
+    arweave:
+      url: https://arweave.net
+  component:
+    rss:
+      - network: rss
+        endpoint: https://rsshub.app/
+        parameters:
+          authentication:
+            access_key:
+    decentralized:
+      - id: ethereum-core
+        network: ethereum
+        worker: core
+        endpoint: ethereum
+        parameters:
+      - id: polygon-lens
+        network: polygon
+        worker: lens
+        endpoint: polygon
+        ipfs_gateways:
+          - https://ipfs.io
+        parameters:
+      - id: farcaster-core
+        network: farcaster
+        worker: core
+        endpoint: farcaster
+      - id: arweave-mirror
+        network: arweave
+        endpoint: arweave
+        worker: mirror
+        ipfs_gateways:
+        parameters:
+      - id: arweave-momoka
+        network: arweave
+        worker: momoka
+        endpoint: polygon
+        parameters:
+
+apiVersion: zeabur.com/v1
+kind: Template
+metadata:
+  name: rss3-node
+spec:
+  description: In the vast RSS3 Network, the RSS3 Node delivers Open Information with efficiency, it is a steadfast cruiser in the byte-filled sea.
+  coverUrl: https://a-us.storyblok.com/f/1018186/2600x1420/59d1051f18/chips.png
+  iconUrl: https://cdn.zeabur.com/rss3.jpg
+  variables:
+    - key: EVM_ADDRESS
+      type: STRING
+      name: Maintainer EVM Address
+      description: What is your maintainer evm address?
+    - key: SIGNATURE
+      type: STRING
+      name: Maintainer Signature
+      description: What is your maintainer signature?
+    - key: PUBLIC_DOMAIN
+      type: DOMAIN
+      name: Domain
+      description: What is the domain you want to expose your node to the public?
+  tags:
+    - web3
+  readme: >
+    ## Description
+    
+    The RSS3 Node, an RSS3 Data Sublayer (DSL) component, is responsible for indexing, transforming, storing, and ultimately serving the Open Information to the end users.
+
+    ## Register Your Node
+
+    ![register](https://a-us.storyblok.com/f/1018186/2001x1437/25f760d323/alphanodes.png)
+
+    You can check [this blog](https://rss3.io/blog/en/how-to-run-an-rss3-node) from RSS3 team for a more detailed guide for registering a node.
+
+    ## The Mainnet Explorer
+
+    One of the best ways to interact with the Alpha Mainnet is through the RSS3 Explorer.
+
+    ![Explorer](https://a-us.storyblok.com/f/1018186/2100x1864/8ef489d9c0/explorer.png)
+
+  services:
+
+    - name: redis
+      template: PREBUILT
+      spec:
+        id: redis
+        name: Redis
+        icon: https://raw.githubusercontent.com/zeabur/service-icons/main/marketplace/redis.svg
+        tags:
+          - Database
+        source:
+          image: redis/redis-stack-server:latest
+        ports:
+          - id: database
+            port: 6379
+            type: TCP
+        volumes:
+          - id: data
+            dir: /data
+        env:
+          REDIS_PASSWORD:
+            default: ${PASSWORD}
+            expose: true
+          REDIS_ARGS:
+            default: --requirepass ${REDIS_PASSWORD}
+          REDIS_HOST:
+            default: ${CONTAINER_HOSTNAME}
+            expose: true
+            readonly: true
+          REDIS_PORT:
+            default: ${DATABASE_PORT}
+            expose: true
+            readonly: true
+          REDIS_CONNECTION_STRING:
+            default: redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}
+            expose: true
+            readonly: true
+          REDIS_URI:
+            default: ${REDIS_CONNECTION_STRING}
+            expose: true
+            readonly: true
+        instructions:
+          - type: TEXT
+            title: Command to connect to your Redis
+            content: redis-cli -h ${PORT_FORWARDED_HOSTNAME} -p
+              ${DATABASE_PORT_FORWARDED_PORT} -a ${REDIS_PASSWORD}
+          - type: TEXT
+            title: Redis Connection String
+            content: redis://:${REDIS_PASSWORD}@${PORT_FORWARDED_HOSTNAME}:${DATABASE_PORT_FORWARDED_PORT}
+          - type: PASSWORD
+            title: Redis password
+            content: ${REDIS_PASSWORD}
+            category: Credentials
+          - type: TEXT
+            title: Redis host
+            content: ${PORT_FORWARDED_HOSTNAME}
+            category: Hostname & Port
+          - type: TEXT
+            title: Redis port
+            content: ${DATABASE_PORT_FORWARDED_PORT}
+            category: Hostname & Port
+
+    - name: cockroachdb
+      template: PREBUILT
+      spec:
+        id: cockroachdb
+        name: Cockroachdb
+        icon: https://raw.githubusercontent.com/zeabur/service-icons/main/marketplace/postgresql.svg
+        docs: https://zeabur.com/docs/marketplace/postgresql
+        tags:
+          - Database
+        source:
+          image: cockroachdb/cockroach:v23.1.8
+          command:
+            - "/bin/sh"
+          args:
+            - "-c"
+            - "cockroach start-single-node --cluster-name=node --insecure"
+        ports:
+          - id: database
+            port: 26257
+            type: TCP
+          - id: http
+            port: 8080
+            type: HTTP
+        volumes:
+          - id: data
+            dir: /cockroach/cockroach-data
+
+    - name: broadcaster
+      template: PREBUILT
+      spec:
+        id: broadcaster
+        name: broadcaster
+        icon: https://cdn.zeabur.com/rss3.jpg
+        source:
+          image: rss3/node:latest
+          command: ["./node","--module=broadcaster"]
+        ports:
+          - id: http
+            port: 80
+            type: HTTP
+        configs:
+          - path: /etc/rss3/node/config.yaml
+            template: *config
+        env:
+          NODE_DISCOVERY_OPERATOR_EVM_ADDRESS:
+            default: "${EVM_ADDRESS}"
+          NODE_DISCOVERY_OPERATOR_SIGNATURE:
+            default: "${SIGNATURE}"
+          NODE_DISCOVERY_SERVER_ENDPOINT:
+            default: "https://${PUBLIC_DOMAIN}.zeabur.app"
+          NODE_DISCOVERY_SERVER_GLOBAL_INDEXER_ENDPOINT:
+            default: "https://gi.rss3.io"
+
+    - name: core
+      template: PREBUILT
+      spec:
+        id: core
+        name: core
+        icon: https://cdn.zeabur.com/rss3.jpg
+        source:
+          image: rss3/node:latest
+          command: ["./node", "--module", "core"]
+        ports:
+          - id: http
+            port: 80
+            type: HTTP
+        configs:
+          - path: /etc/rss3/node/config.yaml
+            template: *config
+
+    - name: monitor
+      template: PREBUILT
+      spec:
+        id: monitor
+        name: monitor
+        icon: https://cdn.zeabur.com/rss3.jpg
+        source:
+          image: rss3/node:latest
+          command: ["./node", "--module", "monitor"]
+        env:
+          NODE_ENV:
+            default: production
+          WORKER_ID:
+            default: monitor
+        configs:
+          - path: /etc/rss3/node/config.yaml
+            template: *config
+
+    - name: ethereum-core
+      template: PREBUILT
+      spec:
+        id: ethereum-core
+        name: ethereum-core
+        icon: https://cdn.zeabur.com/rss3.jpg
+        source:
+          image: rss3/node:latest
+          command: ["./node", "--worker.id=ethereum-core"]
+        configs:
+          - path: /etc/rss3/node/config.yaml
+            template: *config
+
+    - name: polygon-lens
+      template: PREBUILT
+      spec:
+        id: polygon-lens
+        name: polygon-lens
+        icon: https://cdn.zeabur.com/rss3.jpg
+        source:
+          image: rss3/node:latest
+          command: ["./node", "--worker.id=polygon-lens"]
+        configs:
+          - path: /etc/rss3/node/config.yaml
+            template: *config
+
+    - name: farcaster-core
+      template: PREBUILT
+      spec:
+        id: farcaster-core
+        name: farcaster-core
+        icon: https://cdn.zeabur.com/rss3.jpg
+        source:
+          image: rss3/node:latest
+          command: ["./node", "--worker.id=farcaster-core"]
+        configs:
+          - path: /etc/rss3/node/config.yaml
+            template: *config
+
+    - name: arweave-mirror
+      template: PREBUILT
+      spec:
+        id: arweave-mirror
+        name: arweave-mirror
+        icon: https://cdn.zeabur.com/rss3.jpg
+        source:
+          image: rss3/node:latest
+          command: ["./node", "--worker.id=arweave-mirror"]
+        configs:
+          - path: /etc/rss3/node/config.yaml
+            template: *config
+
+    - name: arweave-momoka
+      template: PREBUILT
+      spec:
+        id: arweave-momoka
+        name: arweave-momoka
+        icon: https://cdn.zeabur.com/rss3.jpg
+        source:
+          image: rss3/node:latest
+          command: ["./node", "--worker.id=arweave-momoka"]
+        configs:
+          - path: /etc/rss3/node/config.yaml
+            template: *config
